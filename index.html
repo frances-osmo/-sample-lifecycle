@@ -100,10 +100,34 @@
   .sp{background:#EEEDFE;color:#3C3489}
   .sg{background:#EAF3DE;color:#3B6D11}
   .sb{background:#D3D1C7;color:#2C2C2A}
-  footer{margin-top:32px;font-size:11px;color:var(--text3);text-align:center}
+  .issues{border:1px solid #F09595;border-radius:var(--r);padding:13px 15px;margin-bottom:20px;background:#FCEBEB}
+  @media(prefers-color-scheme:dark){.issues{background:#2a1a1a;border-color:#791F1F}}
+  .issues-header{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .issues-title{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#A32D2D}
+  @media(prefers-color-scheme:dark){.issues-title{color:#F09595}}
+  .issues-count{font-size:10px;font-weight:600;background:#F09595;color:#501313;border-radius:10px;padding:1px 7px}
+  .issues-list{list-style:none}
+  .issues-list li{font-size:12px;color:#791F1F;padding:4px 0;border-bottom:1px solid rgba(163,45,45,0.15);display:flex;gap:7px;align-items:flex-start;line-height:1.55}
+  @media(prefers-color-scheme:dark){.issues-list li{color:#F7C1C1}}
+  .issues-list li:last-child{border-bottom:none}
+  .ibul{width:5px;height:5px;border-radius:50%;background:#E24B4A;margin-top:5.5px;flex-shrink:0}
+  .ist{flex:1;min-width:0;word-break:break-word;outline:none;border-radius:3px}
+  .edit-mode .ist[contenteditable]{background:rgba(226,75,74,.1);padding:1px 4px;margin:-1px -4px;cursor:text}
+  .idx{opacity:0;font-size:12px;color:#A32D2D;cursor:pointer;padding:0 2px;background:none;border:none;line-height:1.6;flex-shrink:0;transition:opacity .12s}
+  .issues-list li:hover .idx{opacity:.55}
+  .idx:hover{opacity:1!important}
 </style>
 </head>
 <body>
+
+<div class="issues">
+  <div class="issues-header">
+    <div class="issues-title">Known issues</div>
+    <span class="issues-count" id="issueCount"></span>
+  </div>
+  <ul class="issues-list" id="issuesList"></ul>
+  <button class="ias" id="addIssueBtn" onclick="addIssue()" style="display:none;padding:4px 0;margin-top:6px">+ add issue</button>
+</div>
 
 <div class="bar">
   <div>
@@ -137,6 +161,18 @@
 
 <script>
 const KEY = 'lifecycle-v1';
+const ISSUES_KEY = 'lifecycle-issues-v1';
+
+const DEFAULT_ISSUES = [
+  'We are currently not creating the intermediate recID \u2014 do we need to?',
+  'We need to democratize the Tecan Code',
+  'Big issue: copying and pasting a lot of information from sheet to sheet \u2014 especially from post Tecan run to panel prep',
+  'Naming convention is not standardized and clean up is required',
+  'Tecan output is individual tabs which makes it confusing \u2014 can we do it 1 sheet per week?',
+  'On UL Console (sample level) \u2014 add the batch run for traceability'
+];
+
+let issues = [...DEFAULT_ISSUES];
 
 const DEFS = {phases:[
 {id:'p1',title:'Serial dilution prep',sub:'Confirm bin \u2192 create records \u2192 make dilutions',nb:'#EEEDFE',nf:'#3C3489',items:[
@@ -198,6 +234,11 @@ function init() {
     const raw = localStorage.getItem(KEY);
     if (raw) D = JSON.parse(raw);
   } catch(e) {}
+  try {
+    const ri = localStorage.getItem(ISSUES_KEY);
+    if (ri) issues = JSON.parse(ri);
+  } catch(e) {}
+  renderIssues();
   render();
 }
 
@@ -207,6 +248,7 @@ function sched() {
   saveT = setTimeout(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify(D));
+      localStorage.setItem(ISSUES_KEY, JSON.stringify(issues));
       setSS('Saved \u2713');
       setTimeout(() => setSS(''), 2000);
     } catch(e) { setSS('Error'); }
@@ -220,16 +262,55 @@ function toggleEdit() {
   document.body.classList.toggle('edit-mode', isEdit);
   document.getElementById('editBtn').textContent = isEdit ? 'Done' : 'Edit';
   document.getElementById('rstBtn').style.display = isEdit ? '' : 'none';
+  renderIssues();
   render();
 }
 
 function doReset() {
   if (!confirm('Reset all content to defaults? This cannot be undone.')) return;
   D = JSON.parse(JSON.stringify(DEFS));
-  try { localStorage.removeItem(KEY); } catch(e) {}
+  issues = [...DEFAULT_ISSUES];
+  try { localStorage.removeItem(KEY); localStorage.removeItem(ISSUES_KEY); } catch(e) {}
   setSS('Reset \u2713');
   setTimeout(() => setSS(''), 2000);
+  renderIssues();
   render();
+}
+
+function renderIssues() {
+  const list = document.getElementById('issuesList');
+  const count = document.getElementById('issueCount');
+  const addBtn = document.getElementById('addIssueBtn');
+  if (!list) return;
+  count.textContent = issues.length;
+  list.innerHTML = issues.map((txt, i) =>
+    `<li><div class="ibul"></div>${isEdit
+      ? `<span class="ist" contenteditable="true" data-idx="${i}" onblur="onIssueBlur(this)">${X(txt)}</span><button class="idx" onclick="delIssue(${i})">&#215;</button>`
+      : `<span class="ist">${X(txt)}</span>`
+    }</li>`
+  ).join('');
+  if (addBtn) addBtn.style.display = isEdit ? '' : 'none';
+}
+
+function addIssue() {
+  issues.push('New issue \u2014 click to edit');
+  renderIssues(); sched();
+  setTimeout(() => {
+    const all = document.querySelectorAll('[data-idx]');
+    if (all.length) {
+      const l = all[all.length-1]; l.focus();
+      const r = document.createRange(); r.selectNodeContents(l);
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+  }, 50);
+}
+
+function delIssue(i) { issues.splice(i, 1); renderIssues(); sched(); }
+
+function onIssueBlur(el) {
+  const i = +el.dataset.idx;
+  issues[i] = el.textContent.trim();
+  sched();
 }
 
 function X(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
